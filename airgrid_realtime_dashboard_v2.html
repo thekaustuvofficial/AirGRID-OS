@@ -1,0 +1,560 @@
+
+<h2 class="sr-only">AirGrid OS real-time dashboard. Drag and drop a CSV flight log. If GPS coordinates are present, shows a map grid with AQI overlay. If GPS is absent, shows sensor timeline charts with full statistical analysis.</h2>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.shell{display:flex;flex-direction:column;min-height:780px;font-family:var(--font-sans);}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);flex-wrap:wrap;gap:8px;}
+.logo{display:flex;align-items:center;gap:8px;}
+.logo-text{font-size:15px;font-weight:500;color:var(--color-text-primary);}
+.logo-sub{font-size:10px;color:var(--color-text-secondary);}
+.topright{display:flex;align-items:center;gap:10px;}
+.status{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary);}
+.dot{width:7px;height:7px;border-radius:50%;background:#888780;}
+.dot.live{background:#1D9E75;}
+.dot.warn{background:#EF9F27;}
+.btn{font-size:12px;padding:5px 14px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.kpi{background:var(--color-background-secondary);border-radius:8px;padding:10px 12px;}
+.kpi-l{font-size:10px;color:var(--color-text-secondary);margin-bottom:4px;}
+.kpi-v{font-size:20px;font-weight:500;color:var(--color-text-primary);line-height:1;}
+.kpi-s{font-size:10px;color:var(--color-text-secondary);margin-top:3px;}
+.kpi-v.good{color:#0F6E56;}
+.kpi-v.warn{color:#854F0B;}
+.kpi-v.bad{color:#A32D2D;}
+.body{display:flex;flex:1;min-height:0;}
+.sidebar{width:190px;min-width:190px;border-right:0.5px solid var(--color-border-tertiary);padding:12px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+.s-title{font-size:10px;color:var(--color-text-secondary);margin-bottom:6px;display:block;text-transform:uppercase;letter-spacing:0.06em;}
+.s-sec{border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:12px;}
+.s-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:11px;}
+.s-label{color:var(--color-text-secondary);}
+.s-val{font-weight:500;color:var(--color-text-primary);}
+.leg{display:flex;flex-direction:column;gap:4px;}
+.leg-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text-secondary);}
+.swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.tab-row{display:flex;gap:4px;margin-bottom:6px;}
+.tab{font-size:11px;padding:3px 8px;border-radius:6px;border:0.5px solid var(--color-border-tertiary);background:transparent;color:var(--color-text-secondary);cursor:pointer;}
+.tab.on{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-secondary);}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.drop-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;border:1.5px dashed var(--color-border-secondary);margin:20px;border-radius:12px;}
+.drop-icon{width:48px;height:48px;border-radius:50%;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);display:flex;align-items:center;justify-content:center;}
+.drop-title{font-size:14px;font-weight:500;color:var(--color-text-primary);}
+.drop-sub{font-size:12px;color:var(--color-text-secondary);text-align:center;max-width:260px;line-height:1.6;}
+.map-area{flex:1;position:relative;overflow:hidden;background:#eef2f5;}
+.map-area.dark{background:#181e2a;}
+.map-area.sat{background:#252e26;}
+.tooltip{position:absolute;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:8px;padding:8px 10px;font-size:11px;pointer-events:none;z-index:10;min-width:150px;display:none;}
+.tt-title{font-weight:500;font-size:12px;color:var(--color-text-primary);margin-bottom:5px;}
+.tt-row{display:flex;justify-content:space-between;gap:10px;color:var(--color-text-secondary);padding:1px 0;}
+.tt-val{color:var(--color-text-primary);font-weight:500;}
+.charts-area{flex:1;display:flex;flex-direction:column;gap:0;overflow-y:auto;padding:14px;gap:12px;}
+.chart-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:10px;padding:12px 14px;}
+.chart-title{font-size:12px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px;}
+.chart-sub{font-size:10px;color:var(--color-text-secondary);margin-bottom:10px;}
+.bottombar{border-top:0.5px solid var(--color-border-tertiary);padding:7px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.bb-label{font-size:11px;color:var(--color-text-secondary);}
+.mode-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500;}
+.mode-badge.map-mode{background:#E1F5EE;color:#0F6E56;}
+.mode-badge.timeline-mode{background:#FAEEDA;color:#854F0B;}
+select{font-size:11px;padding:3px 6px;border-radius:6px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);}
+</style>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="logo">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <circle cx="13" cy="13" r="2.8" fill="#1D9E75"/>
+        <line x1="13" y1="13" x2="4" y2="5.5" stroke="#1D9E75" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="13" y1="13" x2="22" y2="5.5" stroke="#1D9E75" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="13" y1="13" x2="4" y2="20.5" stroke="#1D9E75" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="13" y1="13" x2="22" y2="20.5" stroke="#1D9E75" stroke-width="1.4" stroke-linecap="round"/>
+        <circle cx="4" cy="5.5" r="2.2" fill="#1D9E75" opacity="0.7"/>
+        <circle cx="22" cy="5.5" r="2.2" fill="#1D9E75" opacity="0.7"/>
+        <circle cx="4" cy="20.5" r="2.2" fill="#1D9E75" opacity="0.7"/>
+        <circle cx="22" cy="20.5" r="2.2" fill="#1D9E75" opacity="0.7"/>
+        <circle cx="13" cy="13" r="6" stroke="#1D9E75" stroke-width="0.5" opacity="0.35"/>
+        <circle cx="13" cy="13" r="10" stroke="#1D9E75" stroke-width="0.5" opacity="0.15"/>
+      </svg>
+      <div><div class="logo-text">AirGrid OS</div><div class="logo-sub">Observation & Source Intelligence</div></div>
+    </div>
+    <div class="topright">
+      <div class="status"><div class="dot" id="status-dot"></div><span id="status-text">awaiting data</span></div>
+      <span id="mode-badge" class="mode-badge" style="display:none;"></span>
+      <input type="file" id="file-input" accept=".csv" style="display:none">
+      <button class="btn" onclick="document.getElementById('file-input').click()">Load CSV</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-l">Data points</div><div class="kpi-v" id="k-pts">—</div><div class="kpi-s" id="k-pts-s">load a CSV</div></div>
+    <div class="kpi"><div class="kpi-l">Avg MQ135</div><div class="kpi-v" id="k-mq135">—</div><div class="kpi-s">PM/VOC proxy</div></div>
+    <div class="kpi"><div class="kpi-l">Peak MQ135</div><div class="kpi-v" id="k-peak">—</div><div class="kpi-s" id="k-peak-s">—</div></div>
+    <div class="kpi"><div class="kpi-l">Avg MQ9</div><div class="kpi-v" id="k-mq9">—</div><div class="kpi-s">CO/methane proxy</div></div>
+    <div class="kpi"><div class="kpi-l" id="k5-label">GPS status</div><div class="kpi-v" id="k-gps">—</div><div class="kpi-s" id="k-gps-s">—</div></div>
+  </div>
+
+  <div class="body">
+    <div class="sidebar">
+      <div class="s-sec">
+        <span class="s-title">Overlay sensor</span>
+        <div class="tab-row">
+          <button class="tab on" onclick="setSensor('mq135',this)">MQ135</button>
+          <button class="tab" onclick="setSensor('mq9',this)">MQ9</button>
+        </div>
+      </div>
+
+      <div class="s-sec" id="grid-ctrl">
+        <span class="s-title">Grid cell size</span>
+        <input type="range" id="grid-slider" min="50" max="500" step="10" value="100" style="width:100%;">
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span style="font-size:10px;color:var(--color-text-secondary);">50m</span>
+          <span style="font-size:12px;font-weight:500;color:var(--color-text-primary);" id="grid-val">100m</span>
+          <span style="font-size:10px;color:var(--color-text-secondary);">500m</span>
+        </div>
+      </div>
+
+      <div class="s-sec">
+        <span class="s-title">Overlay opacity</span>
+        <input type="range" id="opacity-slider" min="20" max="90" step="5" value="65" style="width:100%;">
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span style="font-size:10px;color:var(--color-text-secondary);">20%</span>
+          <span style="font-size:12px;font-weight:500;color:var(--color-text-primary);" id="opacity-val">65%</span>
+          <span style="font-size:10px;color:var(--color-text-secondary);">90%</span>
+        </div>
+      </div>
+
+      <div class="s-sec" id="mapbase-ctrl">
+        <span class="s-title">Map base</span>
+        <select id="map-base" style="width:100%;">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="satellite">Satellite (sim)</option>
+        </select>
+      </div>
+
+      <div class="s-sec">
+        <span class="s-title">Min satellites</span>
+        <select id="sat-filter" style="width:100%;">
+          <option value="0">Any</option>
+          <option value="3">3+</option>
+          <option value="5">5+</option>
+          <option value="7">7+</option>
+        </select>
+      </div>
+
+      <div>
+        <span class="s-title">AQI colour scale</span>
+        <div class="leg">
+          <div class="leg-row"><div class="swatch" style="background:#1D9E75;"></div>Good (0–20%)</div>
+          <div class="leg-row"><div class="swatch" style="background:#639922;"></div>Moderate (20–40%)</div>
+          <div class="leg-row"><div class="swatch" style="background:#EF9F27;"></div>Unhealthy (40–60%)</div>
+          <div class="leg-row"><div class="swatch" style="background:#D85A30;"></div>Very unhealthy (60–80%)</div>
+          <div class="leg-row"><div class="swatch" style="background:#A32D2D;"></div>Hazardous (80–100%)</div>
+        </div>
+      </div>
+
+      <div id="stats-panel" style="display:none;">
+        <span class="s-title">Flight statistics</span>
+        <div class="s-row"><span class="s-label">Duration</span><span class="s-val" id="stat-dur">—</span></div>
+        <div class="s-row"><span class="s-label">MQ135 min</span><span class="s-val" id="stat-min135">—</span></div>
+        <div class="s-row"><span class="s-label">MQ135 max</span><span class="s-val" id="stat-max135">—</span></div>
+        <div class="s-row"><span class="s-label">MQ9 min</span><span class="s-val" id="stat-min9">—</span></div>
+        <div class="s-row"><span class="s-label">MQ9 max</span><span class="s-val" id="stat-max9">—</span></div>
+        <div class="s-row"><span class="s-label">Trend</span><span class="s-val" id="stat-trend">—</span></div>
+      </div>
+    </div>
+
+    <div class="main" id="main-area">
+      <div class="drop-zone" id="drop-zone">
+        <div class="drop-icon">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M11 3v12M6 10l5 5 5-5" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 17h16" stroke="#888780" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="drop-title">Drop your flight log CSV</div>
+        <div class="drop-sub">Supports GPS-locked logs (map view) and bench/calibration logs (sensor timeline). Columns: Latitude, Longitude, Satellites, MQ135_Raw, MQ9_Raw. Rows with -1 or -9 auto-filtered.</div>
+        <button class="btn" onclick="document.getElementById('file-input').click()">Browse file</button>
+      </div>
+
+      <div id="map-view" style="display:none;flex:1;position:relative;">
+        <canvas id="map-canvas" style="width:100%;height:100%;display:block;"></canvas>
+        <div class="tooltip" id="map-tooltip">
+          <div class="tt-title" id="tt-title">Grid cell</div>
+          <div class="tt-row"><span>MQ135 avg</span><span class="tt-val" id="tt-mq135">—</span></div>
+          <div class="tt-row"><span>MQ9 avg</span><span class="tt-val" id="tt-mq9">—</span></div>
+          <div class="tt-row"><span>Readings</span><span class="tt-val" id="tt-count">—</span></div>
+          <div class="tt-row"><span>Satellites</span><span class="tt-val" id="tt-sats">—</span></div>
+          <div class="tt-row"><span>AQI level</span><span class="tt-val" id="tt-level">—</span></div>
+        </div>
+      </div>
+
+      <div id="timeline-view" style="display:none;flex:1;overflow-y:auto;">
+        <div class="charts-area">
+          <div class="chart-card">
+            <div class="chart-title">MQ135 sensor — PM2.5 / VOC proxy</div>
+            <div class="chart-sub">Raw ADC readings over flight time. Higher = worse air quality.</div>
+            <div style="position:relative;height:160px;"><canvas id="chart-mq135" role="img" aria-label="MQ135 sensor readings over time">MQ135 air quality sensor data over flight duration.</canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">MQ9 sensor — CO / methane proxy</div>
+            <div class="chart-sub">Raw ADC readings over flight time. Combustion and industrial gas indicator.</div>
+            <div style="position:relative;height:160px;"><canvas id="chart-mq9" role="img" aria-label="MQ9 sensor readings over time">MQ9 CO and methane sensor data over flight duration.</canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Dual sensor comparison — normalised overlay</div>
+            <div class="chart-sub">Both sensors normalised 0–1. Divergence indicates distinct pollutant sources.</div>
+            <div style="position:relative;height:160px;"><canvas id="chart-dual" role="img" aria-label="Normalised comparison of MQ135 and MQ9 over time">Normalised dual sensor comparison over flight.</canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">AQI severity distribution</div>
+            <div class="chart-sub">Percentage of readings in each AQI band (MQ135).</div>
+            <div style="position:relative;height:140px;"><canvas id="chart-dist" role="img" aria-label="AQI band distribution bar chart">Distribution of readings across AQI severity bands.</canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <span class="bb-label" id="bb-info">drag a CSV onto the dashboard or use Load CSV</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--color-text-secondary);" id="coord-display"></span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+let allData=[], gridCells=[], mapBounds=null, activeSensor='mq135', overlayOpacity=0.65;
+let gridSize=100, satFilter=0, mapBase='light', isGPS=false;
+let charts={};
+const canvas=document.getElementById('map-canvas');
+const ctx=canvas.getContext('2d');
+
+function aqiColor(n){
+  if(n<0.2)return[29,158,117];
+  if(n<0.4)return[99,153,34];
+  if(n<0.6)return[239,159,39];
+  if(n<0.8)return[216,90,48];
+  return[163,45,45];
+}
+function aqiLabel(n){
+  if(n<0.2)return'Good';
+  if(n<0.4)return'Moderate';
+  if(n<0.6)return'Unhealthy';
+  if(n<0.8)return'Very unhealthy';
+  return'Hazardous';
+}
+function aqiHex(n){
+  const c=aqiColor(n);
+  return`rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function parseCSV(text){
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const gpsPoints=[], timePoints=[];
+  for(const line of lines){
+    const cols=line.split(/[\t,]/).map(s=>s.trim());
+    if(cols[0]==='Latitude'||cols[0]==='latitude')continue;
+    const lat=parseFloat(cols[0]);
+    const lng=parseFloat(cols[1]);
+    const sats=parseFloat(cols[2]);
+    const mq135=parseFloat(cols[3]);
+    const mq9=parseFloat(cols[4]);
+    if(isNaN(mq135)||isNaN(mq9))continue;
+    if(mq135<0||mq9<0)continue;
+    // Real GPS row
+    if(!isNaN(lat)&&!isNaN(lng)&&lat>0&&lat<=90&&lng>0&&lng<=180){
+      gpsPoints.push({lat,lng,sats:isNaN(sats)?0:sats,mq135,mq9});
+    }
+    // Timestamp/altitude row (lat is ms timestamp, lng=-1)
+    else if(!isNaN(lat)&&lat>100&&(isNaN(lng)||lng<0)){
+      timePoints.push({t:lat,mq135,mq9,sats:isNaN(sats)?0:sats});
+    }
+  }
+  return{gpsPoints,timePoints};
+}
+
+function buildGrid(data,cellM){
+  if(!data.length)return[];
+  const fd=satFilter>0?data.filter(d=>d.sats>=satFilter):data;
+  if(!fd.length)return[];
+  const minLat=Math.min(...fd.map(d=>d.lat)),maxLat=Math.max(...fd.map(d=>d.lat));
+  const minLng=Math.min(...fd.map(d=>d.lng)),maxLng=Math.max(...fd.map(d=>d.lng));
+  const midLat=(minLat+maxLat)/2;
+  const R=6371000,latRad=midLat*Math.PI/180;
+  const mpdLat=(Math.PI/180)*R;
+  const mpdLng=(Math.PI/180)*R*Math.cos(latRad);
+  const cLat=cellM/mpdLat,cLng=cellM/mpdLng;
+  mapBounds={minLat,maxLat,minLng,maxLng,cellLat:cLat,cellLng:cLng};
+  const cells={};
+  for(const pt of fd){
+    const gi=Math.floor((pt.lat-minLat)/cLat);
+    const gj=Math.floor((pt.lng-minLng)/cLng);
+    const k=`${gi}_${gj}`;
+    if(!cells[k])cells[k]={gi,gj,m135:[],m9:[],sats:[]};
+    cells[k].m135.push(pt.mq135);
+    cells[k].m9.push(pt.mq9);
+    cells[k].sats.push(pt.sats);
+  }
+  return Object.values(cells).map(c=>({
+    gi:c.gi,gj:c.gj,
+    mq135:c.m135.reduce((a,b)=>a+b,0)/c.m135.length,
+    mq9:c.m9.reduce((a,b)=>a+b,0)/c.m9.length,
+    sats:c.sats.reduce((a,b)=>a+b,0)/c.sats.length,
+    count:c.m135.length
+  }));
+}
+
+function drawMap(){
+  if(!gridCells.length||!mapBounds)return;
+  const rect=canvas.getBoundingClientRect();
+  canvas.width=rect.width||480;
+  canvas.height=rect.height||400;
+  const W=canvas.width,H=canvas.height;
+  const bg=mapBase==='dark'?'#181e2a':mapBase==='satellite'?'#252e26':'#eef2f5';
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  const gc=mapBase==='dark'?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)';
+  ctx.strokeStyle=gc;ctx.lineWidth=0.5;
+  for(let x=0;x<=W;x+=W/10){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<=H;y+=H/10){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  const vals=gridCells.map(c=>activeSensor==='mq135'?c.mq135:c.mq9);
+  const minV=Math.min(...vals),maxV=Math.max(...vals),range=(maxV-minV)||1;
+  const{minLat,maxLat,minLng,maxLng,cellLat,cellLng}=mapBounds;
+  const latR=(maxLat-minLat)||0.001,lngR=(maxLng-minLng)||0.001;
+  const pad=0.1,uW=W*(1-pad*2),uH=H*(1-pad*2);
+  for(const cell of gridCells){
+    const val=activeSensor==='mq135'?cell.mq135:cell.mq9;
+    const norm=(val-minV)/range;
+    const[r,g,b]=aqiColor(norm);
+    const cX=(cell.gj*cellLng/lngR)*uW+W*pad;
+    const cY=H-((cell.gi*cellLat/latR)*uH+H*pad)-(cellLat/latR)*uH;
+    const cW=Math.max(3,(cellLng/lngR)*uW);
+    const cH=Math.max(3,(cellLat/latR)*uH);
+    ctx.fillStyle=`rgba(${r},${g},${b},${overlayOpacity})`;
+    ctx.fillRect(cX,cY,cW,cH);
+    ctx.strokeStyle=`rgba(${r},${g},${b},0.7)`;
+    ctx.lineWidth=0.5;ctx.strokeRect(cX,cY,cW,cH);
+    if(cW>32&&cH>16){
+      ctx.fillStyle=mapBase==='dark'?'rgba(255,255,255,0.9)':'rgba(0,0,0,0.75)';
+      ctx.font=`${Math.min(11,cH*0.38)}px sans-serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(Math.round(val),cX+cW/2,cY+cH/2);
+    }
+  }
+  const bc=mapBase==='dark'?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)';
+  ctx.strokeStyle=bc;ctx.lineWidth=1;ctx.strokeRect(W*pad,H*pad,uW,uH);
+  const tc=mapBase==='dark'?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.35)';
+  ctx.fillStyle=tc;ctx.font='10px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`Grid: ${gridSize}m  ·  Sensor: ${activeSensor.toUpperCase()}  ·  Cells: ${gridCells.length}  ·  Points: ${allData.length}`,W*pad+5,H*pad+5);
+}
+
+function buildTimeline(pts){
+  if(!pts.length)return;
+  const labels=pts.map((p,i)=>{
+    const sec=Math.round(p.t/1000);
+    if(pts.length<=60)return sec+'s';
+    return i%Math.ceil(pts.length/20)===0?(sec+'s'):'';
+  });
+  const m135=pts.map(p=>Math.round(p.mq135));
+  const m9=pts.map(p=>Math.round(p.mq9));
+  const maxAll=Math.max(...m135,...m9)||1;
+  const m135n=pts.map(p=>parseFloat((p.mq135/maxAll).toFixed(3)));
+  const m9n=pts.map(p=>parseFloat((p.mq9/maxAll).toFixed(3)));
+
+  const opts={responsive:true,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{display:false}},
+    elements:{point:{radius:0}},
+    scales:{x:{ticks:{maxRotation:0,font:{size:9},color:'#888780',autoSkip:true,maxTicksLimit:12},grid:{color:'rgba(128,128,128,0.1)'}},
+             y:{ticks:{font:{size:9},color:'#888780'},grid:{color:'rgba(128,128,128,0.1)'}}}};
+
+  if(charts.mq135){charts.mq135.destroy();}
+  charts.mq135=new Chart(document.getElementById('chart-mq135'),{
+    type:'line',
+    data:{labels,datasets:[{label:'MQ135',data:m135,borderColor:'#1D9E75',borderWidth:1.5,fill:true,backgroundColor:'rgba(29,158,117,0.08)',tension:0.3}]},
+    options:{...opts,scales:{...opts.scales,y:{...opts.scales.y,title:{display:true,text:'ADC raw',font:{size:9},color:'#888780'}}}}
+  });
+
+  if(charts.mq9){charts.mq9.destroy();}
+  charts.mq9=new Chart(document.getElementById('chart-mq9'),{
+    type:'line',
+    data:{labels,datasets:[{label:'MQ9',data:m9,borderColor:'#BA7517',borderWidth:1.5,fill:true,backgroundColor:'rgba(186,117,23,0.08)',tension:0.3}]},
+    options:{...opts,scales:{...opts.scales,y:{...opts.scales.y,title:{display:true,text:'ADC raw',font:{size:9},color:'#888780'}}}}
+  });
+
+  if(charts.dual){charts.dual.destroy();}
+  charts.dual=new Chart(document.getElementById('chart-dual'),{
+    type:'line',
+    data:{labels,datasets:[
+      {label:'MQ135 (norm)',data:m135n,borderColor:'#1D9E75',borderWidth:1.5,fill:false,tension:0.3,borderDash:[]},
+      {label:'MQ9 (norm)',data:m9n,borderColor:'#BA7517',borderWidth:1.5,fill:false,tension:0.3,borderDash:[4,3]}
+    ]},
+    options:{...opts,plugins:{legend:{display:false}},
+      scales:{...opts.scales,y:{min:0,max:1,ticks:{font:{size:9},color:'#888780'},grid:{color:'rgba(128,128,128,0.1)'}}}}
+  });
+
+  const bands=['Good','Moderate','Unhealthy','Very unhealthy','Hazardous'];
+  const colors=['#1D9E75','#639922','#EF9F27','#D85A30','#A32D2D'];
+  const max135=Math.max(...m135)||1,min135=Math.min(...m135);
+  const r=max135-min135||1;
+  const counts=[0,0,0,0,0];
+  for(const v of m135){const n=(v-min135)/r;const i=Math.min(4,Math.floor(n*5));counts[i]++;}
+  const total=m135.length||1;
+  const pcts=counts.map(c=>parseFloat((c/total*100).toFixed(1)));
+  if(charts.dist){charts.dist.destroy();}
+  charts.dist=new Chart(document.getElementById('chart-dist'),{
+    type:'bar',
+    data:{labels:bands,datasets:[{data:pcts,backgroundColor:colors,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{font:{size:9},color:'#888780'},grid:{display:false}},
+               y:{ticks:{font:{size:9},color:'#888780',callback:v=>v+'%'},grid:{color:'rgba(128,128,128,0.1)'},max:100}}}
+  });
+}
+
+function updateKPIs(gps,ts){
+  const data=gps.length?gps:ts;
+  if(!data.length)return;
+  const m135=data.map(d=>d.mq135),m9=data.map(d=>d.mq9);
+  const avg135=m135.reduce((a,b)=>a+b,0)/m135.length;
+  const avg9=m9.reduce((a,b)=>a+b,0)/m9.length;
+  const max135=Math.max(...m135);
+  document.getElementById('k-pts').textContent=data.length;
+  document.getElementById('k-pts-s').textContent=gps.length?`${gps.length} GPS points`:`${ts.length} timed readings`;
+  document.getElementById('k-mq135').textContent=Math.round(avg135);
+  document.getElementById('k-peak').textContent=Math.round(max135);
+  document.getElementById('k-mq9').textContent=Math.round(avg9);
+  if(gps.length){
+    document.getElementById('k5-label').textContent='GPS cells';
+    document.getElementById('k-gps').textContent=gridCells.length;
+    document.getElementById('k-gps-s').textContent=`at ${gridSize}m grid`;
+    document.getElementById('k-gps').className='kpi-v good';
+  } else {
+    document.getElementById('k5-label').textContent='GPS lock';
+    document.getElementById('k-gps').textContent='None';
+    document.getElementById('k-gps-s').textContent='timeline mode active';
+    document.getElementById('k-gps').className='kpi-v warn';
+  }
+  if(ts.length){
+    const dur=Math.round((ts[ts.length-1].t-ts[0].t)/1000);
+    document.getElementById('stat-dur').textContent=dur>60?Math.round(dur/60)+'min ':dur+'s';
+    document.getElementById('stat-min135').textContent=Math.round(Math.min(...m135));
+    document.getElementById('stat-max135').textContent=Math.round(max135);
+    document.getElementById('stat-min9').textContent=Math.round(Math.min(...m9));
+    document.getElementById('stat-max9').textContent=Math.round(Math.max(...m9));
+    const first=m135.slice(0,Math.ceil(m135.length/4)),last=m135.slice(-Math.ceil(m135.length/4));
+    const fa=first.reduce((a,b)=>a+b,0)/first.length,la=last.reduce((a,b)=>a+b,0)/last.length;
+    document.getElementById('stat-trend').textContent=la>fa*1.1?'Rising':'la<fa*0.9'?'Falling':'Stable';
+    document.getElementById('stats-panel').style.display='block';
+  }
+  const peakPt=gps.length?gps.reduce((a,b)=>b.mq135>a.mq135?b:a):null;
+  document.getElementById('k-peak-s').textContent=peakPt?`${peakPt.lat.toFixed(4)}, ${peakPt.lng.toFixed(4)}`:'peak reading';
+}
+
+function showMode(gps,ts){
+  document.getElementById('drop-zone').style.display='none';
+  const badge=document.getElementById('mode-badge');
+  badge.style.display='inline-block';
+  if(gps.length){
+    document.getElementById('map-view').style.display='flex';
+    document.getElementById('timeline-view').style.display='none';
+    badge.textContent='Map mode';badge.className='mode-badge map-mode';
+    document.getElementById('grid-ctrl').style.display='block';
+    document.getElementById('mapbase-ctrl').style.display='block';
+    setTimeout(()=>{drawMap();},50);
+  } else {
+    document.getElementById('map-view').style.display='none';
+    document.getElementById('timeline-view').style.display='flex';
+    badge.textContent='Timeline mode — no GPS lock';badge.className='mode-badge timeline-mode';
+    document.getElementById('grid-ctrl').style.display='none';
+    setTimeout(()=>{buildTimeline(ts);},50);
+  }
+}
+
+function processFile(text){
+  const{gpsPoints,timePoints}=parseCSV(text);
+  isGPS=gpsPoints.length>0;
+  allData=isGPS?gpsPoints:timePoints;
+  if(!allData.length){
+    document.getElementById('status-text').textContent='no valid data found in CSV';
+    document.getElementById('status-dot').className='dot warn';
+    return;
+  }
+  document.getElementById('status-dot').className='dot live';
+  document.getElementById('status-text').textContent=isGPS?`live · ${gpsPoints.length} GPS points`:`loaded · ${timePoints.length} timed readings`;
+  if(isGPS){gridCells=buildGrid(gpsPoints,gridSize);}
+  updateKPIs(gpsPoints,timePoints);
+  showMode(gpsPoints,timePoints);
+  document.getElementById('bb-info').textContent=isGPS?`${gpsPoints.length} GPS points · ${gridCells.length} grid cells at ${gridSize}m`:`${timePoints.length} readings · no GPS lock — showing sensor timeline`;
+}
+
+document.getElementById('grid-slider').addEventListener('input',function(){
+  gridSize=parseInt(this.value);
+  document.getElementById('grid-val').textContent=gridSize+'m';
+  if(isGPS&&allData.length){gridCells=buildGrid(allData,gridSize);updateKPIs(allData,[]);drawMap();}
+});
+document.getElementById('opacity-slider').addEventListener('input',function(){
+  overlayOpacity=parseInt(this.value)/100;
+  document.getElementById('opacity-val').textContent=this.value+'%';
+  if(isGPS)drawMap();
+});
+document.getElementById('sat-filter').addEventListener('change',function(){
+  satFilter=parseInt(this.value);
+  if(isGPS&&allData.length){gridCells=buildGrid(allData,gridSize);drawMap();}
+});
+document.getElementById('map-base').addEventListener('change',function(){
+  mapBase=this.value;
+  const ma=document.getElementById('map-view');
+  ma.className=mapBase==='dark'?'map-area dark':mapBase==='satellite'?'map-area sat':'map-area';
+  if(isGPS)drawMap();
+});
+
+function setSensor(s,btn){
+  activeSensor=s;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');
+  if(isGPS)drawMap();
+}
+
+canvas.addEventListener('mousemove',function(e){
+  if(!gridCells.length||!mapBounds)return;
+  const rect=canvas.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)*(canvas.width/rect.width);
+  const my=(e.clientY-rect.top)*(canvas.height/rect.height);
+  const{minLat,maxLat,minLng,maxLng,cellLat,cellLng}=mapBounds;
+  const latR=(maxLat-minLat)||0.001,lngR=(maxLng-minLng)||0.001;
+  const pad=0.1,uW=canvas.width*(1-pad*2),uH=canvas.height*(1-pad*2);
+  const lng=((mx-canvas.width*pad)/uW)*lngR+minLng;
+  const lat=((canvas.height-my-canvas.height*pad)/uH)*latR+minLat;
+  document.getElementById('coord-display').textContent=`lat ${lat.toFixed(5)}  lng ${lng.toFixed(5)}`;
+  const gi=Math.floor((lat-minLat)/cellLat),gj=Math.floor((lng-minLng)/cellLng);
+  const cell=gridCells.find(c=>c.gi===gi&&c.gj===gj);
+  const tt=document.getElementById('map-tooltip');
+  if(cell){
+    const vals=gridCells.map(c=>activeSensor==='mq135'?c.mq135:c.mq9);
+    const minV=Math.min(...vals),maxV=Math.max(...vals);
+    const norm=((activeSensor==='mq135'?cell.mq135:cell.mq9)-minV)/((maxV-minV)||1);
+    document.getElementById('tt-title').textContent=`Cell [${gi}, ${gj}]`;
+    document.getElementById('tt-mq135').textContent=Math.round(cell.mq135);
+    document.getElementById('tt-mq9').textContent=Math.round(cell.mq9);
+    document.getElementById('tt-count').textContent=cell.count;
+    document.getElementById('tt-sats').textContent=cell.sats.toFixed(1);
+    document.getElementById('tt-level').textContent=aqiLabel(norm);
+    const tx=e.clientX-rect.left+14,ty=e.clientY-rect.top+14;
+    tt.style.left=Math.min(tx,rect.width-165)+'px';
+    tt.style.top=Math.min(ty,rect.height-130)+'px';
+    tt.style.display='block';
+  } else {tt.style.display='none';}
+});
+canvas.addEventListener('mouseleave',()=>{document.getElementById('map-tooltip').style.display='none';});
+
+document.getElementById('file-input').addEventListener('change',function(){
+  if(this.files[0]){const r=new FileReader();r.onload=e=>processFile(e.target.result);r.readAsText(this.files[0]);}
+});
+const dz=document.getElementById('drop-zone');
+document.querySelector('.shell').addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='#1D9E75';});
+document.querySelector('.shell').addEventListener('dragleave',()=>{dz.style.borderColor='';});
+document.querySelector('.shell').addEventListener('drop',e=>{
+  e.preventDefault();dz.style.borderColor='';
+  if(e.dataTransfer.files[0]){const r=new FileReader();r.onload=ev=>processFile(ev.target.result);r.readAsText(e.dataTransfer.files[0]);}
+});
+window.addEventListener('resize',()=>{if(isGPS&&gridCells.length)drawMap();});
+</script>
